@@ -585,9 +585,10 @@ def favourite_items():
             and parsed.scheme in ('http', 'https') and parsed.hostname)):
             continue
         directory = favourite.get('type') == 'window'
+        external_window = directory and not uri.startswith(ROOT)
         items.append({
-            'id': handle(uri, 'directory' if directory else 'file'),
-            'type': 'directory' if directory else 'file',
+            'id': handle(uri, 'favourite_window' if external_window else ('directory' if directory else 'file')),
+            'type': 'file' if external_window else ('directory' if directory else 'file'),
             'title': strip_markup(favourite.get('title') or 'Senza titolo'),
             'poster': picture(favourite.get('thumbnail') or ''),
             'favourite': True,
@@ -696,6 +697,14 @@ class Handler(BaseHTTPRequestHandler):
                 with lock:
                     record = handles.get(key)
                 uri = resolve(key)
+                if record and record[2] == 'favourite_window':
+                    if not any(favourite_target(f) == uri and f.get('type') == 'window'
+                               for f in native_favourites()):
+                        raise BridgeError('Favourite no longer exists')
+                    result = rpc('GUI.ActivateWindow', {
+                        'window': 'videos', 'parameters': [uri, 'return']
+                    })
+                    return self.reply(200, {'ok': True, 'result': result})
                 # Only radio items are routed via the metadata-aware Kodi addon.
                 if record and record[2] == 'radio':
                     uri = radio_plugin_uri(uri)
