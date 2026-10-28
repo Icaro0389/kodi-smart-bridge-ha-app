@@ -1,0 +1,51 @@
+{
+  "name": "Kodi Smart Bridge (Pilot)",
+  "version": "0.1.0",
+  "slug": "kodi-smart-bridge",
+  "description": "Kodi Smart Bridge experimental Home Assistant app, side-by-side test",
+  "url": "https://github.com/Icaro0389/kodi-smart-bridge-ha-app",
+  "arch": [
+    "amd64",
+    "aarch64"
+  ],
+  "init": false,
+  "startup": "services",
+  "boot": "manual",
+  "homeassistant_api": false,
+  "host_network": false,
+  "ports": {
+    "8787/tcp": 8790
+  },
+  "ports_description": {
+    "8787/tcp": "Pilot API, do not expose to the Internet"
+  },
+  "map": [
+    "share:ro"
+  ],
+  "options": {
+    "kodi_host": "127.0.0.1",
+    "kodi_port": 9090,
+    "bridge_token": "",
+    "iptv_dns": "",
+    "iptv_username": "",
+    "iptv_password": "",
+    "refresh_hours": 6,
+    "tv_playlist": "/share/kodi-smart-bridge/tv.m3u8",
+    "radio_playlist": "/share/kodi-smart-bridge/radio.m3u",
+    "vod_fix_host": "",
+    "vod_fix_port": 24000
+  },
+  "schema": {
+    "kodi_host": "str",
+    "kodi_port": "port",
+    "bridge_token": "password",
+    "iptv_dns": "str",
+    "iptv_username": "str",
+    "iptv_password": "password",
+    "refresh_hours": "int(1,168)",
+    "tv_playlist": "str",
+    "radio_playlist": "str",
+    "vod_fix_host": "str?",
+    "vod_fix_port": "port?"
+  }
+}
