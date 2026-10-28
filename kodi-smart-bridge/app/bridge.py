@@ -580,7 +580,7 @@ def favourite_items():
         # Only expose actionable paths from the IPTVXC plugin. Native
         # favourites from other addons are retained in Kodi, not modified.
         parsed = urlparse(uri)
-        if not (uri.startswith(ROOT) or (
+        if not (uri.startswith('plugin://') or (
             favourite.get('type') == 'media'
             and parsed.scheme in ('http', 'https') and parsed.hostname)):
             continue
