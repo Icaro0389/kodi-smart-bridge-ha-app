@@ -625,6 +625,37 @@ def favourite_add(key, title, poster=None):
     return {'ok': True, 'already_saved': False}
 
 
+
+def favourite_remove(key):
+    """Toggle an existing Kodi favourite off, never create one by accident."""
+    if not isinstance(key, str) or len(key) > 128:
+        raise BridgeError('Invalid ID')
+    with lock:
+        record = handles.get(key)
+    uri = resolve(key)
+    if not record or record[2] not in ('directory', 'file', 'favourite_window'):
+        raise BridgeError('Invalid favourite')
+    directory = record[2] in ('directory', 'favourite_window')
+    matches = [f for f in native_favourites()
+               if favourite_target(f) == uri and
+               f.get('type') == ('window' if directory else 'media')]
+    if len(matches) != 1:
+        raise BridgeError('Favourite not found or ambiguous; refresh the list')
+    favourite = matches[0]
+    args = {'title': favourite['title'], 'type': favourite['type'],
+            'thumbnail': favourite.get('thumbnail') or ''}
+    if directory:
+        args.update({'window': favourite.get('window') or 'videos',
+                     'windowparameter': uri})
+    else:
+        args['path'] = uri
+    rpc('Favourites.AddFavourite', args)
+    if any(favourite_target(f) == uri and f.get('type') == favourite['type']
+           for f in native_favourites()):
+        raise BridgeError('Kodi did not remove this favourite')
+    return {'ok': True, 'removed': True}
+
+
 def radio_items():
     if not RADIO: return {'configured':False, 'items':[]}
     result = playlist_browse('radio', 0, 2000)
@@ -659,6 +690,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(200, {'ok':True,'kodi':result})
             if route == '/v1/favourites' and not post:
                 return self.reply(200, favourite_items())
+            if route == '/v1/favourite/remove' and post:
+                return self.reply(200, favourite_remove(data.get('id')))
             if route == '/v1/favourite' and post:
                 return self.reply(200, favourite_add(
                     data.get('id'), data.get('title'), data.get('poster')))
