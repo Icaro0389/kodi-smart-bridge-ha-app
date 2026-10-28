@@ -561,6 +561,18 @@ def favourite_target(entry):
     return ''
 
 
+def mark_favourites(response):
+    saved = {favourite_target(f) for f in native_favourites()}
+    for item in response.get('items', []):
+        key = item.get('id')
+        if isinstance(key, str):
+            with lock:
+                entry = handles.get(key)
+            if entry and entry[0] > time.monotonic():
+                item['favourite'] = entry[1] in saved
+    return response
+
+
 def favourite_items():
     items = []
     for favourite in native_favourites():
@@ -669,7 +681,7 @@ class Handler(BaseHTTPRequestHandler):
                     page, size = data.get('page',0), data.get('page_size',24)
                     if type(page) is not int or not 0 <= page <= 10000: raise BridgeError('Invalid page')
                     if type(size) is not int or not 1 <= size <= 100: raise BridgeError('Invalid page size')
-                    return self.reply(200, search_catalog(data['root'], data['search'], page, size))
+                    return self.reply(200, mark_favourites(search_catalog(data['root'], data['search'], page, size)))
                 if data.get('root') in root and not data.get('id'):
                     path = ROOT + root[data['root']]
                 elif isinstance(data.get('id'),str): path = resolve(data['id'],'directory')
@@ -677,7 +689,7 @@ class Handler(BaseHTTPRequestHandler):
                 page, size = data.get('page',0), data.get('page_size',24)
                 if type(page) is not int or page < 0 or page > 10000: raise BridgeError('Invalid page')
                 if type(size) is not int or not 1 <= size <= 100: raise BridgeError('Invalid page size')
-                return self.reply(200,browse(path,page,size))
+                return self.reply(200,mark_favourites(browse(path,page,size)))
             if route == '/v1/play' and post:
                 key = data.get('id')
                 if not isinstance(key,str): raise BridgeError('Invalid ID')
