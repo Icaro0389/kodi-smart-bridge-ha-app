@@ -544,6 +544,71 @@ def radio_plugin_uri(stream_url):
         idx += 1
     raise BridgeError('Radio station no longer in playlist; reload radio')
 
+def native_favourites():
+    """Read Kodi's actual favourites, never exposing raw IPTV paths to clients."""
+    result = rpc('Favourites.GetFavourites', {
+        'properties': ['path', 'window', 'windowparameter', 'thumbnail']
+    })
+    return result.get('favourites') or []
+
+
+def favourite_target(entry):
+    kind = entry.get('type')
+    if kind == 'media':
+        return entry.get('path') or ''
+    if kind == 'window' and (entry.get('window') or '').lower() in ('videos', 'video'):
+        return entry.get('windowparameter') or ''
+    return ''
+
+
+def favourite_items():
+    items = []
+    for favourite in native_favourites():
+        uri = favourite_target(favourite)
+        # Only expose actionable paths from the IPTVXC plugin. Native
+        # favourites from other addons are retained in Kodi, not modified.
+        if not uri.startswith(ROOT):
+            continue
+        directory = favourite.get('type') == 'window'
+        items.append({
+            'id': handle(uri, 'directory' if directory else 'file'),
+            'type': 'directory' if directory else 'file',
+            'title': strip_markup(favourite.get('title') or 'Senza titolo'),
+            'poster': picture(favourite.get('thumbnail') or ''),
+            'favourite': True,
+            'group': 'Preferiti Kodi'
+        })
+    return {'items': items, 'total': len(items), 'page': 0,
+            'page_size': max(1, len(items)), 'has_more': False}
+
+
+def favourite_add(key, title, poster=None):
+    if not isinstance(key, str) or len(key) > 128:
+        raise BridgeError('Invalid ID')
+    if not isinstance(title, str) or not 1 <= len(title) <= 250:
+        raise BridgeError('Invalid title')
+    with lock:
+        record = handles.get(key)
+    uri = resolve(key)
+    if not record or record[2] not in ('file', 'directory'):
+        raise BridgeError('Only movies and series can be favourited')
+    if record[2] == 'directory' and not uri.startswith(ROOT):
+        raise BridgeError('Unsupported series directory')
+    if record[2] == 'file' and not (uri.startswith(ROOT) or
+            urlparse(uri).scheme in ('http', 'https')):
+        raise BridgeError('Unsupported media path')
+    if any(favourite_target(fav) == uri for fav in native_favourites()):
+        return {'ok': True, 'already_saved': True}
+    options = {'title': strip_markup(title), 'thumbnail': picture(poster) or ''}
+    if record[2] == 'directory':
+        options.update({'type': 'window', 'window': 'videos',
+                        'windowparameter': uri})
+    else:
+        options.update({'type': 'media', 'path': uri})
+    rpc('Favourites.AddFavourite', options)
+    return {'ok': True, 'already_saved': False}
+
+
 def radio_items():
     if not RADIO: return {'configured':False, 'items':[]}
     result = playlist_browse('radio', 0, 2000)
@@ -576,6 +641,11 @@ class Handler(BaseHTTPRequestHandler):
             if route == '/v1/health' and not post:
                 result = rpc('JSONRPC.Version')
                 return self.reply(200, {'ok':True,'kodi':result})
+            if route == '/v1/favourites' and not post:
+                return self.reply(200, favourite_items())
+            if route == '/v1/favourite' and post:
+                return self.reply(200, favourite_add(
+                    data.get('id'), data.get('title'), data.get('poster')))
             if route == '/v1/roots' and not post:
                 return self.reply(200, {'roots':[
                     {'id':'film','title':'SmartVOD'}, {'id':'series','title':'Serie TV'},
