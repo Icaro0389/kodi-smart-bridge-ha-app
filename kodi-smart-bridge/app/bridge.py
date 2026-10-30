@@ -695,6 +695,25 @@ class Handler(BaseHTTPRequestHandler):
             if route == '/v1/favourite' and post:
                 return self.reply(200, favourite_add(
                     data.get('id'), data.get('title'), data.get('poster')))
+            if route == '/v1/remote' and post:
+                allowed = {'Input.Up', 'Input.Down', 'Input.Left', 'Input.Right',
+                           'Input.Select', 'Input.Back', 'Input.Home', 'Input.Info',
+                           'Input.ContextMenu', 'Input.ShowOSD',
+                           'Input.ExecuteAction'}
+                method = data.get('method')
+                if method not in allowed:
+                    raise BridgeError('Remote command not permitted')
+                if method == 'Input.ExecuteAction':
+                    action = data.get('action')
+                    if action not in ('play', 'pause', 'stop', 'next', 'previous',
+                                      'volumeup', 'volumedown', 'mute', 'fullscreen'):
+                        raise BridgeError('Remote action not permitted')
+                    result = rpc(method, {'action': action})
+                else:
+                    if set(data) != {'method'}:
+                        raise BridgeError('Unexpected remote parameters')
+                    result = rpc(method)
+                return self.reply(200, {'ok': True, 'result': result})
             if route == '/v1/roots' and not post:
                 return self.reply(200, {'roots':[
                     {'id':'film','title':'SmartVOD'}, {'id':'series','title':'Serie TV'},
