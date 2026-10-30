@@ -1,6 +1,6 @@
 {
   "name": "Kodi Smart Bridge (Pilot)",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "slug": "kodi-smart-bridge",
   "description": "Kodi Smart Bridge experimental Home Assistant app, side-by-side test",
   "url": "https://github.com/Icaro0389/kodi-smart-bridge-ha-app",
