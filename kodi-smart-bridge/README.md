@@ -30,3 +30,20 @@
 - Do not forward the bridge API (host port 8790), Kodi JSON-RPC (9090), or the application to the public Internet. Bridge bearer authentication does **not** encrypt HTTP; use only on a trusted LAN or secure private tunnel.
 - Git retains previous commits: the initial public history included a private-LAN IP and provider hostname in code, but no embedded account secrets were identified. If you consider even those references sensitive, rewrite Git history / recreate the repository before distribution.
 - This app is still a **pilot**. Existing installed app settings are unchanged by repository commits. Test a fresh install on a nonconflicting port before any cutover; do not replace the working app without backup.
+
+
+## Kodi remote endpoint (v0.2.2)
+
+Authenticated `POST /v1/remote` accepts `{"method":"Input.Up"}`,
+`Input.Down`, `Input.Left`, `Input.Right`, `Input.Select`,
+`Input.Back`, `Input.Home`, `Input.Info`, `Input.ContextMenu`,
+`Input.ShowOSD`.
+
+Transport controls use `{"method":"Input.ExecuteAction","action":"pause"}` with the
+allowed actions `play`, `pause`, `stop`, `next`, `previous`,
+`volumeup`, `volumedown`, `mute`, `fullscreen`.
+
+Aveniq 0.7 uses this endpoint for its D-pad. The existing LXC bridge
+must be upgraded to bridge.py with this endpoint before the remote buttons
+work. Updating this GitHub repository alone does not update an unrelated
+running LXC service.
