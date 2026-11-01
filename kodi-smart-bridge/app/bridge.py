@@ -807,7 +807,8 @@ class Handler(BaseHTTPRequestHandler):
                     })
                     return self.reply(200, {'ok': True, 'result': result})
                 if record and record[2] == 'youtube':
-                    if not re.fullmatch(r'plugin://plugin\\.video\\.youtube/play/\\?video_id=[A-Za-z0-9_-]{11}', uri):
+                    video_id = uri.rsplit('video_id=', 1)[-1]
+                    if not uri.startswith('plugin://plugin.video.youtube/play/?video_id=') or not re.fullmatch('[A-Za-z0-9_-]{11}', video_id):
                         raise BridgeError('Invalid YouTube item')
                 # Only radio items are routed via the metadata-aware Kodi addon.
                 if record and record[2] == 'radio':
