@@ -1,0 +1,16 @@
+name: Promote v0.3.0 to stable
+on:
+  push:
+    paths:
+      - '.github/workflows/promote-v0-3-0-stable.yml'
+permissions:
+  contents: write
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark existing v0.3.0 release stable
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release edit v0.3.0 --prerelease=false --latest
