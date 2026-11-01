@@ -1,6 +1,6 @@
 {
   "name": "Kodi Smart Bridge (Pilot)",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "slug": "kodi-smart-bridge",
   "description": "Kodi Smart Bridge experimental Home Assistant app, side-by-side test",
   "url": "https://github.com/Icaro0389/kodi-smart-bridge-ha-app",
@@ -33,7 +33,8 @@
     "tv_playlist": "/share/kodi-smart-bridge/tv.m3u8",
     "radio_playlist": "/share/kodi-smart-bridge/radio.m3u",
     "vod_fix_host": "",
-    "vod_fix_port": 24000
+    "vod_fix_port": 24000,
+    "youtube_api_key": ""
   },
   "schema": {
     "kodi_host": "str",
@@ -46,6 +47,7 @@
     "tv_playlist": "str",
     "radio_playlist": "str",
     "vod_fix_host": "str?",
-    "vod_fix_port": "port?"
+    "vod_fix_port": "port?",
+    "youtube_api_key": "password?"
   }
 }

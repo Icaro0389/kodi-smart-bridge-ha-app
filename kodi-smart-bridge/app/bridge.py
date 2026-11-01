@@ -2,7 +2,10 @@
 """Kodi Smart Bridge: localhost-only, no third-party dependencies."""
 import json, os, re, socket, time, secrets, threading, ipaddress, sqlite3, codecs
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlencode
+from urllib.request import urlopen
+from urllib.error import HTTPError, URLError
+import html
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HOST = os.environ.get('BRIDGE_HOST', '127.0.0.1')
@@ -15,6 +18,9 @@ TOKEN = os.environ.get('BRIDGE_TOKEN', '')
 RADIO = os.environ.get('RADIO_M3U_PATH', '/share/kodi-smart-bridge/radio.m3u')
 TV = os.environ.get('TV_M3U_PATH', '/share/kodi-smart-bridge/tv.m3u8')
 ROOT = 'plugin://plugin.video.iptvxc/'
+YT_KEY = os.environ.get('YOUTUBE_API_KEY', '').strip()
+YT_CACHE = {}
+YT_LOCK = threading.Lock()
 TTL = 1800
 lock = threading.RLock()
 handles = {} # opaque-id -> (expiry, underlying Kodi path, filetype)
@@ -544,6 +550,47 @@ def radio_plugin_uri(stream_url):
         idx += 1
     raise BridgeError('Radio station no longer in playlist; reload radio')
 
+
+def youtube_search(query):
+    """Public video search; never disclose the API key or raw Google errors."""
+    if not YT_KEY:
+        return {'items': [], 'configured': False, 'message': 'Configura youtube_api_key nelle opzioni dell App'}
+    if not isinstance(query, str) or not 2 <= len(query.strip()) <= 100:
+        raise BridgeError('Search requires 2-100 characters')
+    query = query.strip()
+    with YT_LOCK:
+        entry = YT_CACHE.get(query.casefold())
+        if entry and entry[0] > time.monotonic():
+            return entry[1]
+    url = 'https://www.googleapis.com/youtube/v3/search?' + urlencode({
+        'part': 'snippet', 'type': 'video', 'maxResults': 30,
+        'q': query, 'key': YT_KEY, 'safeSearch': 'moderate'})
+    try:
+        with urlopen(url, timeout=12) as response:
+            raw = json.load(response)
+    except HTTPError as exc:
+        raise BridgeError('YouTube API rejected search (check key and quota)')
+    except (URLError, OSError, ValueError):
+        raise BridgeError('YouTube API unavailable')
+    items = []
+    for entry in raw.get('items', []):
+        video_id = (entry.get('id') or {}).get('videoId', '')
+        if not isinstance(video_id, str) or not re.fullmatch(r'[A-Za-z0-9_-]{11}', video_id):
+            continue
+        snippet = entry.get('snippet') or {}
+        thumbnails = snippet.get('thumbnails') or {}
+        thumb = (thumbnails.get('medium') or thumbnails.get('default') or {}).get('url')
+        items.append({'id': handle('plugin://plugin.video.youtube/play/?video_id=' + video_id, 'youtube'),
+                      'type': 'file', 'title': html.unescape(snippet.get('title') or '')[:250],
+                      'group': html.unescape(snippet.get('channelTitle') or '')[:100],
+                      'poster': thumb if isinstance(thumb, str) and
+                          thumb.startswith('https://i.ytimg.com/') else None})
+    result = {'items': items, 'total': len(items), 'configured': True}
+    with YT_LOCK:
+        if len(YT_CACHE) > 100: YT_CACHE.clear()
+        YT_CACHE[query.casefold()] = (time.monotonic() + 600, result)
+    return result
+
 def native_favourites():
     """Read Kodi's actual favourites, never exposing raw IPTV paths to clients."""
     result = rpc('Favourites.GetFavourites', {
@@ -714,6 +761,8 @@ class Handler(BaseHTTPRequestHandler):
                         raise BridgeError('Unexpected remote parameters')
                     result = rpc(method)
                 return self.reply(200, {'ok': True, 'result': result})
+            if route == '/v1/youtube/search' and post:
+                return self.reply(200, youtube_search(data.get('search')))
             if route == '/v1/roots' and not post:
                 return self.reply(200, {'roots':[
                     {'id':'film','title':'SmartVOD'}, {'id':'series','title':'Serie TV'},
@@ -757,6 +806,10 @@ class Handler(BaseHTTPRequestHandler):
                         'window': 'videos', 'parameters': [uri, 'return']
                     })
                     return self.reply(200, {'ok': True, 'result': result})
+                if record and record[2] == 'youtube':
+                    video_id = uri.rsplit('video_id=', 1)[-1]
+                    if not uri.startswith('plugin://plugin.video.youtube/play/?video_id=') or not re.fullmatch('[A-Za-z0-9_-]{11}', video_id):
+                        raise BridgeError('Invalid YouTube item')
                 # Only radio items are routed via the metadata-aware Kodi addon.
                 if record and record[2] == 'radio':
                     uri = radio_plugin_uri(uri)
