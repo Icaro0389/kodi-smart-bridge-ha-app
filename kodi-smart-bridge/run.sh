@@ -26,5 +26,6 @@ export TV_M3U_PATH="$(python3 -c 'import json;print(json.load(open("/data/option
 export RADIO_M3U_PATH="$(python3 -c 'import json;print(json.load(open("/data/options.json"))["radio_playlist"])')"
 export VOD_FIX_HOST="$(python3 -c 'import json;print(json.load(open("/data/options.json")).get("vod_fix_host",""))')"
 export VOD_FIX_PORT="$(python3 -c 'import json;print(json.load(open("/data/options.json")).get("vod_fix_port",24000))')"
+export YOUTUBE_API_KEY="$(python3 -c 'import json;print(json.load(open("/data/options.json")).get("youtube_api_key",""))')"
 export BRIDGE_DATA_DIR=/data/catalogs IPTVXC_SETTINGS_PATH=/data/iptvxc-settings.xml
 python3 /app/runner.py
