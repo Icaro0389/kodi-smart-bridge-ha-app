@@ -591,6 +591,52 @@ def youtube_search(query):
         YT_CACHE[query.casefold()] = (time.monotonic() + 600, result)
     return result
 
+def youtube_history(page=0, size=24):
+    """Read the native Kodi YouTube playback history; no Google API needed."""
+    if type(page) is not int or not 0 <= page <= 10000:
+        raise BridgeError('Invalid page')
+    if type(size) is not int or not 1 <= size <= 100:
+        raise BridgeError('Invalid page size')
+    directory = 'plugin://plugin.video.youtube/kodion/playback_history/list/'
+    raw = rpc('Files.GetDirectory', {
+        'directory': directory, 'media': 'files',
+        'properties': ['title', 'thumbnail']
+    })
+    entries = raw.get('files') or []
+    if not isinstance(entries, list):
+        entries = []
+    valid = []
+    for entry in entries:
+        if not isinstance(entry, dict) or entry.get('filetype') != 'file':
+            continue
+        path = entry.get('file')
+        if not isinstance(path, str) or not path.startswith(
+                'plugin://plugin.video.youtube/play/?'):
+            continue
+        from urllib.parse import parse_qs, urlsplit
+        params = parse_qs(urlsplit(path).query)
+        ids = params.get('video_id', [])
+        if len(ids) != 1 or not re.fullmatch('[A-Za-z0-9_-]{11}', ids[0]):
+            continue
+        video_id = ids[0]
+        valid.append((video_id, strip_markup(entry.get('label') or
+                                               entry.get('title') or 'YouTube')))
+    total = len(valid)
+    items = []
+    for video_id, title in valid[page*size:(page+1)*size]:
+        # Recreate a canonical playback URI, ignoring all untrusted addon params.
+        uri = 'plugin://plugin.video.youtube/play/?video_id=' + video_id
+        items.append({
+            'id': handle(uri, 'youtube'),
+            'type': 'file',
+            'title': title,
+            'poster': 'https://i.ytimg.com/vi/' + video_id + '/hqdefault.jpg',
+            'group': 'Cronologia YouTube'
+        })
+    return {'items': items, 'total': total, 'page': page,
+            'page_size': size, 'has_more': (page+1)*size < total}
+
+
 def native_favourites():
     """Read Kodi's actual favourites, never exposing raw IPTV paths to clients."""
     result = rpc('Favourites.GetFavourites', {
@@ -761,6 +807,9 @@ class Handler(BaseHTTPRequestHandler):
                         raise BridgeError('Unexpected remote parameters')
                     result = rpc(method)
                 return self.reply(200, {'ok': True, 'result': result})
+            if route == '/v1/youtube/history' and post:
+                return self.reply(200, youtube_history(
+                    data.get('page', 0), data.get('page_size', 24)))
             if route == '/v1/youtube/search' and post:
                 return self.reply(200, youtube_search(data.get('search')))
             if route == '/v1/roots' and not post:
