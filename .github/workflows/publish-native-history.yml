@@ -1,0 +1,17 @@
+name: Publish native YouTube history v0.3.1
+on:
+  push:
+    paths:
+      - '.github/workflows/publish-native-history.yml'
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish stable v0.3.1
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create v0.3.1 --target "${GITHUB_SHA}" --title "Kodi Smart Bridge App v0.3.1" --notes "Native YouTube history from Kodi addon; uses canonical video IDs, safe thumbnails and opaque handles. Requires integration v0.3.1 and remote card v0.7.2." --latest
