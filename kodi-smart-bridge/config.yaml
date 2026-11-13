@@ -1,8 +1,8 @@
 {
   "name": "Kodi Smart Bridge (Pilot)",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "slug": "kodi-smart-bridge",
-  "description": "Kodi Smart Bridge experimental Home Assistant app, side-by-side test",
+  "description": "Kodi Smart Bridge HA app (pilot), with optional authenticated HTTP JSON-RPC fallback",
   "url": "https://github.com/Icaro0389/kodi-smart-bridge-ha-app",
   "arch": [
     "amd64",
@@ -34,7 +34,10 @@
     "radio_playlist": "/share/kodi-smart-bridge/radio.m3u",
     "vod_fix_host": "",
     "vod_fix_port": 24000,
-    "youtube_api_key": ""
+    "youtube_api_key": "",
+    "kodi_http_port": 8090,
+    "kodi_http_username": "",
+    "kodi_http_password": ""
   },
   "schema": {
     "kodi_host": "str",
@@ -48,6 +51,9 @@
     "radio_playlist": "str",
     "vod_fix_host": "str?",
     "vod_fix_port": "port?",
-    "youtube_api_key": "password?"
+    "youtube_api_key": "password?",
+    "kodi_http_port": "port",
+    "kodi_http_username": "str?",
+    "kodi_http_password": "password?"
   }
 }
