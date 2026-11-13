@@ -21,6 +21,9 @@ PYINNER
 export BRIDGE_HOST=0.0.0.0 BRIDGE_PORT=8787
 export KODI_HOST="$(python3 -c 'import json;print(json.load(open("/data/options.json"))["kodi_host"])')"
 export KODI_TCP_PORT="$(python3 -c 'import json;print(json.load(open("/data/options.json"))["kodi_port"])')"
+export KODI_HTTP_PORT="$(python3 -c 'import json;print(json.load(open("/data/options.json")).get("kodi_http_port",8090))')"
+export KODI_HTTP_USERNAME="$(python3 -c 'import json;print(json.load(open("/data/options.json")).get("kodi_http_username",""))')"
+export KODI_HTTP_PASSWORD="$(python3 -c 'import json;print(json.load(open("/data/options.json")).get("kodi_http_password",""))')"
 export BRIDGE_TOKEN="$(python3 -c 'import json;print(json.load(open("/data/options.json"))["bridge_token"])')"
 export TV_M3U_PATH="$(python3 -c 'import json;print(json.load(open("/data/options.json"))["tv_playlist"])')"
 export RADIO_M3U_PATH="$(python3 -c 'import json;print(json.load(open("/data/options.json"))["radio_playlist"])')"
