@@ -1,0 +1,29 @@
+name: Validate Kodi Bridge Python transport
+on:
+  push:
+    paths:
+      - 'kodi-smart-bridge/app/bridge.py'
+      - 'kodi-smart-bridge/config.yaml'
+      - 'kodi-smart-bridge/run.sh'
+      - '.github/workflows/validate-transport.yml'
+  pull_request:
+    paths:
+      - 'kodi-smart-bridge/app/bridge.py'
+      - 'kodi-smart-bridge/config.yaml'
+      - 'kodi-smart-bridge/run.sh'
+permissions:
+  contents: read
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Validate Python and App options
+        run: |
+          python -m py_compile kodi-smart-bridge/app/bridge.py
+          python -m py_compile kodi-smart-bridge/app/runner.py
+          python -m json.tool kodi-smart-bridge/config.yaml > /dev/null
+          sh -n kodi-smart-bridge/run.sh
