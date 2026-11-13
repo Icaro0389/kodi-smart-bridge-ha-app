@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Kodi Smart Bridge: localhost-only, no third-party dependencies."""
-import json, os, re, socket, time, secrets, threading, ipaddress, sqlite3, codecs
+import json, os, re, socket, time, secrets, threading, ipaddress, sqlite3, codecs, base64
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from urllib.parse import urlparse, urlencode
-from urllib.request import urlopen
+from urllib.request import urlopen, Request
 from urllib.error import HTTPError, URLError
 import html
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -31,12 +32,44 @@ MAX_INDEX_ITEMS = 60000
 
 class BridgeError(Exception): pass
 
-def rpc(method, params=None):
+# TCP to authenticated HTTP fallback. KODI_RPC_HTTP_FALLBACK_V2
+class _KodiTransportError(BridgeError):
+    pass
+
+_rpc_state_lock = threading.Lock()
+_rpc_http_until = 0.0
+_rpc_local_auth = None
+
+def _http_credentials():
+    global _rpc_local_auth
+    # HA App: explicit credentials. Kodi LXC: load Kodi's local settings if present.
+    username = os.environ.get('KODI_HTTP_USERNAME', '')
+    password = os.environ.get('KODI_HTTP_PASSWORD', '')
+    if username:
+        return username, password
+    if _rpc_local_auth is not None:
+        return _rpc_local_auth or None
+    try:
+        root = ET.parse(os.environ.get(
+            'KODI_HTTP_SETTINGS_PATH',
+            '/home/kodi/.kodi/userdata/guisettings.xml'
+        )).getroot()
+        def setting(key):
+            item = root.find(".//setting[@id='%s']" % key)
+            return (item.text or '') if item is not None else ''
+        username = setting('services.webserverusername')
+        password = setting('services.webserverpassword')
+        _rpc_local_auth = (username, password) if username else ()
+    except (OSError, ET.ParseError):
+        _rpc_local_auth = ()
+    return _rpc_local_auth or None
+
+def _rpc_tcp(method, params=None):
     req = {'jsonrpc':'2.0', 'id':secrets.token_hex(8), 'method':method, 'params':params or {}}
     decoder = json.JSONDecoder()
     try:
-        with socket.create_connection((KODI_HOST, KODI_PORT), timeout=12) as s:
-            s.settimeout(20)
+        with socket.create_connection((KODI_HOST, KODI_PORT), timeout=2) as s:
+            s.settimeout(5)
             s.sendall(json.dumps(req, ensure_ascii=False).encode('utf-8'))
             data = ''
             while len(data) < 8_000_000:
@@ -49,12 +82,62 @@ def rpc(method, params=None):
                     try: obj, used = decoder.raw_decode(data)
                     except json.JSONDecodeError: break
                     data = data[used:]
-                    if obj.get('id') == req['id']:
+                    if isinstance(obj, dict) and obj.get('id') == req['id']:
                         if 'error' in obj: raise BridgeError('Kodi JSON-RPC error: ' + str(obj['error'].get('message', 'unknown')))
                         return obj.get('result', {})
-            raise BridgeError('Kodi did not return a complete response')
+            raise _KodiTransportError('Kodi TCP response incomplete')
     except (OSError, UnicodeError) as e:
-        raise BridgeError('Kodi TCP not reachable / incomplete response') from e
+        raise _KodiTransportError('Kodi TCP not reachable') from e
+
+def _rpc_http(method, params=None):
+    auth = _http_credentials()
+    if not auth:
+        raise _KodiTransportError('Kodi HTTP credentials not configured')
+    port = int(os.environ.get('KODI_HTTP_PORT', '8090'))
+    credentials = base64.b64encode((auth[0] + ':' + auth[1]).encode('utf-8')).decode('ascii')
+    req_id = secrets.token_hex(8)
+    payload = json.dumps({
+        'jsonrpc': '2.0', 'id': req_id,
+        'method': method, 'params': params or {}
+    }, ensure_ascii=False).encode('utf-8')
+    request = Request(
+        'http://%s:%d/jsonrpc' % (KODI_HOST if ':' not in KODI_HOST else '[%s]' % KODI_HOST, port),
+        data=payload, headers={
+            'Content-Type': 'application/json',
+            'Authorization': 'Basic ' + credentials,
+        },
+    )
+    try:
+        with urlopen(request, timeout=8) as response:
+            result = json.load(response)
+    except HTTPError as e:
+        raise _KodiTransportError('Kodi HTTP status %d' % e.code) from None
+    except (URLError, OSError, ValueError) as e:
+        raise _KodiTransportError('Kodi HTTP unavailable or invalid response') from e
+    if not isinstance(result, dict) or result.get('id') != req_id:
+        raise _KodiTransportError('Kodi HTTP JSON-RPC response mismatch')
+    if 'error' in result:
+        raise BridgeError('Kodi JSON-RPC error: ' + str(result['error'].get('message', 'unknown')))
+    return result.get('result', {})
+
+def rpc(method, params=None):
+    global _rpc_http_until
+    # No credentials: preserve TCP-only behavior; do not log secrets.
+    can_fallback = _http_credentials() is not None
+    with _rpc_state_lock:
+        http_first = can_fallback and time.monotonic() < _rpc_http_until
+    if http_first:
+        return _rpc_http(method, params)
+    try:
+        return _rpc_tcp(method, params)
+    except _KodiTransportError:
+        if not can_fallback:
+            raise
+        with _rpc_state_lock:
+            if time.monotonic() >= _rpc_http_until:
+                print('[Kodi RPC] TCP failed; HTTP fallback enabled for 45 seconds', flush=True)
+            _rpc_http_until = time.monotonic() + 45
+        return _rpc_http(method, params)
 
 def handle(path, typ):
     key = secrets.token_urlsafe(20)
