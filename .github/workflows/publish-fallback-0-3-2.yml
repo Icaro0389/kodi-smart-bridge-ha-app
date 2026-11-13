@@ -1,0 +1,17 @@
+name: Publish Kodi Smart Bridge App v0.3.2
+on:
+  push:
+    paths:
+      - '.github/workflows/publish-fallback-0-3-2.yml'
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish v0.3.2
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create v0.3.2 --target "${GITHUB_SHA}" --title "Kodi Smart Bridge HA App v0.3.2 — JSON-RPC fallback" --notes "Adds TCP 9090 to HTTP 8090 authenticated JSON-RPC fallback with 45s circuit breaker; configurable Kodi HTTP credentials for HA App, local Kodi settings support for LXC-compatible installs. Pilot app only; does not redeploy the existing LXC bridge." --latest
