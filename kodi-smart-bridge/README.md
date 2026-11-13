@@ -22,6 +22,17 @@
 **Rollback:** Stop/uninstall the pilot; the LXC bridge remains unchanged and the dashboard continues to use its original endpoint.
 
 
+
+## JSON-RPC transport recovery (v0.3.2)
+
+- TCP JSON-RPC (default port 9090) is the primary transport.
+- On TCP transport failure or incomplete response, the bridge can retry the same request over Kodi's authenticated HTTP JSON-RPC endpoint (default port 8090). A 45-second circuit breaker then sends requests directly over HTTP before attempting TCP again. Kodi JSON-RPC application errors do **not** trigger fallback.
+- On the **existing Kodi LXC installation**, the bridge may read `services.webserverusername` and `services.webserverpassword` from `/home/kodi/.kodi/userdata/guisettings.xml` when that file is accessible to the bridge process. No additional credentials are required in that case.
+- The **Home Assistant App** runs separately from Kodi, so it cannot read Kodi's local settings. Set `kodi_http_port`, `kodi_http_username` and `kodi_http_password` in App options to enable fallback. If the username is empty and local settings are inaccessible, the bridge remains TCP-only.
+- Make sure the Kodi HTTP server is enabled, accepts connections from the HA App's network, and is firewalled to trusted devices. The HTTP endpoint uses Basic authentication over **unencrypted HTTP**: use only a trusted/private network or a secure tunnel, never expose it to the Internet. Use HTTPS via a secure proxy/tunnel if crossing untrusted networks; this version's built-in fallback URL uses HTTP.
+- HTTP fallback does not fix a Kodi core crash or guarantee recovery when both transports are unavailable. It does not change the existing Home Assistant integration, frontend card or the user's LXC service.
+- v0.3.2 is published for the **pilot HA App**. Updating this repo does not deploy the patch to an independently running LXC service; that service already received its own tested local fallback. Test the pilot App separately before any production cutover.
+
 ## Security and deployment notice
 
 - Never commit `/data/options.json`, API tokens, IPTV account credentials, indexed SQLite catalogs, or M3U files. Configure secrets only via Home Assistant app options.
